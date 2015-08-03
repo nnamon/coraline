@@ -34,9 +34,11 @@ def default_rule(seed, index, sample, scores):
     mutated = "".join(mutable)
     return mutated
 
+
 class Coraline:
 
-    def __init__(self, sample_file, offset_file, seed=None, mutationrule=default_rule):
+    def __init__(self, sample_file, offset_file, seed=None,
+                 mutationrule=default_rule):
         # Load the sample into memory
         with open(sample_file) as sample:
             self.sample = sample.read()
@@ -46,8 +48,9 @@ class Coraline:
             self.scores = self.parse_scores(offset.read())
 
         # Prevents overly predictable mutations between fuzzing sessions
-        if seed == None:
-            self.seed = ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for i in range(16))
+        if seed is None:
+            self.seed = ''.join(random.SystemRandom().choice(
+                string.ascii_letters + string.digits) for i in range(16))
         else:
             self.seed = seed
 
@@ -55,15 +58,16 @@ class Coraline:
 
     def parse_scores(self, data):
         if len(data) % 8 != 0:
-    	    raise Exception("Score data must contain only pairs of 32 bit integers")
+            e = "Score data must contain only pairs of 32 bit integers"
+            raise Exception(e)
         scores = []
         for i in range(0, len(data), 8):
-    	    scores.append(struct.unpack("II", data[i:i+8]))
+            scores.append(struct.unpack("II", data[i:i+8]))
         return scores
 
     def build_range(self, fuzz_range):
         start, end = fuzz_range
-        if end == None:
+        if end is None:
             return itertools.count(start=start, step=1)
         else:
             return xrange(start, end)
@@ -73,10 +77,7 @@ class Coraline:
             self.fuzz_step(i)
 
     def fuzz_step(self, index):
-        import md5
-        print md5.md5(self.mutationrule(self.seed, index, self.sample, self.scores)).hexdigest()
-
-
+        self.mutationrule(self.seed, index, self.sample, self.scores)
 
 
 def main():
