@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import struct
 import random
@@ -30,8 +30,8 @@ def default_rule(seed, index, sample, scores):
             continue
         # if the score is more than zero, mutate the byte
         if score > 0:
-            mutable[offset] = chr(rand.randrange(0x00, 0xff+1))
-    mutated = "".join(mutable)
+            mutable[offset] = rand.randrange(0x00, 0xff+1)
+    mutated = bytearray(mutable)
     return mutated
 
 
@@ -40,11 +40,11 @@ class Coraline:
     def __init__(self, sample_file, offset_file, seed=None,
                  mutationrule=default_rule):
         # Load the sample into memory
-        with open(sample_file) as sample:
+        with open(sample_file, 'rb') as sample:
             self.sample = sample.read()
 
         # Load scores from zl file
-        with open(offset_file) as offset:
+        with open(offset_file, 'rb') as offset:
             self.scores = self.parse_scores(offset.read())
 
         # Prevents overly predictable mutations between fuzzing sessions
@@ -70,7 +70,7 @@ class Coraline:
         if end is None:
             return itertools.count(start=start, step=1)
         else:
-            return xrange(start, end)
+            return range(start, end)
 
     def fuzz(self, fuzz_range=(0, None)):
         for i in self.build_range(fuzz_range):
