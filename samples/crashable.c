@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
  
-int main() {
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    printf("No");
+    return 1;
+  }
   char * buffer = 0;
   long length;
-  FILE * fp = fopen("crashed.txt", "r");
+  FILE * fp = fopen(argv[1], "r");
   char badbuffer[20];
  
   if (fp) {
@@ -18,9 +22,11 @@ int main() {
     fclose(fp);
   }
  
-  if (buffer) {
+  if (buffer[2] == 0x42) {
     strcpy(badbuffer, buffer);
     printf("%s", badbuffer);
   }
+
+  return 0;
  
 }

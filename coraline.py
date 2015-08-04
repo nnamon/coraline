@@ -4,7 +4,9 @@ import struct
 import random
 import string
 import itertools
-
+import os
+import binascii
+import subprocess
 
 def default_rule(seed, index, sample, scores):
     """The default mutation rule simply randomises each byte with
@@ -19,7 +21,7 @@ def default_rule(seed, index, sample, scores):
     scores   -  offset/score pairs
 
     Returns:
-    mutated  -  a string containing mutated data
+    mutated  -  a bytearray containing mutated data
     """
     rand_seed = seed + str(index)
     rand = random.Random(rand_seed)
@@ -38,7 +40,8 @@ def default_rule(seed, index, sample, scores):
 class Coraline:
 
     def __init__(self, sample_file, offset_file, seed=None,
-                 mutationrule=default_rule):
+                 mutationrule=default_rule, workingdirectory="/tmp",
+                 timeout=10):
         # Load the sample into memory
         with open(sample_file, 'rb') as sample:
             self.sample = sample.read()
@@ -54,7 +57,20 @@ class Coraline:
         else:
             self.seed = seed
 
+        # Create the working directories
         self.mutationrule = mutationrule
+        self.workingdirectory = os.path.join(workingdirectory, "coraline")
+        self.workingin = os.path.join(self.workingdirectory, "input")
+        self.workingout = os.path.join(self.workingdirectory, "output")
+        if not os.path.exists(self.workingdirectory):
+            os.makedirs(self.workingdirectory)
+        if not os.path.exists(self.workingin):
+            os.makedirs(self.workingin)
+        if not os.path.exists(self.workingout):
+            os.makedirs(self.workingout)
+
+        # Set the timeout
+        self.timeout = timeout
 
     def parse_scores(self, data):
         if len(data) % 8 != 0:
@@ -72,17 +88,41 @@ class Coraline:
         else:
             return range(start, end)
 
+    def handle_hang(self):
+        print("Hang")
+
+    def handle_crash(self, index, result, pid):
+        print(index, result, pid)
+
     def fuzz(self, fuzz_range=(0, None)):
         for i in self.build_range(fuzz_range):
             self.fuzz_step(i)
 
     def fuzz_step(self, index):
-        self.mutationrule(self.seed, index, self.sample, self.scores)
+        mutated = self.mutationrule(self.seed, index, self.sample, self.scores)
+        uniq = binascii.hexlify(bytes(self.seed, "ascii")).decode("ascii") + "_"
+        working_filein = os.path.join(self.workingin,uniq + str(index))
+        working_fileout = os.path.join(self.workingout,uniq + str(index))
+        with open(working_filein, 'wb') as working_file:
+            working_file.write(mutated)
+        try:
+            process = subprocess.Popen(["./samples/crashable", working_filein],
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL)
+            pid = process.pid
+            result = process.wait(self.timeout)
+        except subprocess.TimeoutExpired:
+            result = None
+
+        if result is None:
+            self.handle_hang(index)
+        elif result < 0:
+            self.handle_crash(index, result, pid)
 
 
 def main():
-    cora = Coraline("./samples/test.wav", "./samples/range_score.zl", "seed")
-    cora.fuzz((0, 5))
+    cora = Coraline("./samples/good.txt", "./samples/crashable_score.zl")
+    cora.fuzz((0, 255))
 
 if __name__ == "__main__":
     main()
