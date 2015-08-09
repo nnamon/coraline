@@ -8,6 +8,7 @@ import os
 import binascii
 import subprocess
 
+
 def default_rule(seed, index, sample, scores):
     """The default mutation rule simply randomises each byte with
     a score. The check for a score more than zero is to demonstrate
@@ -23,6 +24,7 @@ def default_rule(seed, index, sample, scores):
     Returns:
     mutated  -  a bytearray containing mutated data
     """
+
     rand_seed = seed + str(index)
     rand = random.Random(rand_seed)
     mutable = list(sample)
@@ -41,7 +43,7 @@ class Coraline:
 
     def __init__(self, sample_file, offset_file, seed=None,
                  mutationrule=default_rule, workingdirectory="/tmp",
-                 timeout=10):
+                 reportdirectory="./", timeout=10):
         # Load the sample into memory
         with open(sample_file, 'rb') as sample:
             self.sample = sample.read()
@@ -88,8 +90,8 @@ class Coraline:
         else:
             return range(start, end)
 
-    def handle_hang(self):
-        print("Hang")
+    def handle_hang(self, index):
+        print(index, "Hang")
 
     def handle_crash(self, index, result, pid):
         print(index, result, pid)
@@ -101,14 +103,14 @@ class Coraline:
     def fuzz_step(self, index):
         mutated = self.mutationrule(self.seed, index, self.sample, self.scores)
         uniq = binascii.hexlify(bytes(self.seed, "ascii")).decode("ascii") + "_"
-        working_filein = os.path.join(self.workingin,uniq + str(index))
-        working_fileout = os.path.join(self.workingout,uniq + str(index))
+        working_filein = os.path.join(self.workingin, uniq + str(index))
+        # working_fileout = os.path.join(self.workingout, uniq + str(index))
         with open(working_filein, 'wb') as working_file:
             working_file.write(mutated)
         try:
             process = subprocess.Popen(["./samples/crashable", working_filein],
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL)
+                                       stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL)
             pid = process.pid
             result = process.wait(self.timeout)
         except subprocess.TimeoutExpired:
@@ -119,10 +121,25 @@ class Coraline:
         elif result < 0:
             self.handle_crash(index, result, pid)
 
+        os.unlink(working_filein)
+
+    def cleanup(self):
+        if os.listdir(self.workingin):
+            for i in os.listdir(self.workingin):
+                os.unlink(os.path.join(self.workingin, i))
+        if os.listdir(self.workingout):
+            for i in os.listdir(self.workingout):
+                os.unlink(i)
+        os.rmdir(self.workingin)
+        os.rmdir(self.workingout)
+        os.rmdir(self.workingdirectory)
+
 
 def main():
-    cora = Coraline("./samples/good.txt", "./samples/crashable_score.zl")
+    cora = Coraline("./samples/good.txt", "./samples/crashable_score.zl",
+                    "seed", timeout=2)
     cora.fuzz((0, 255))
+    cora.cleanup()
 
 if __name__ == "__main__":
     main()
